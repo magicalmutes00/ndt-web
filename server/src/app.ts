@@ -98,6 +98,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         database,
         auth: { configured: isAuthConfigured },
         storage: { provider: storageProviderName() },
+        /**
+         * Why the SPA may be 404ing. Rendering the frontend requires BOTH of
+         * these to be true, and a misconfigured deploy usually gets one of them
+         * wrong, so report them rather than leaving it to guesswork.
+         */
+        staticSite: {
+          enabled: config.serveStatic,
+          distPresent: existsSync(distDir),
+          distPath: distDir,
+        },
       },
     });
   });
@@ -115,6 +125,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // Let the catch-all below decide when to serve index.html.
       wildcard: false,
     });
+    app.log.info(`[static] serving the SPA from ${distDir}`);
 
     app.setNotFoundHandler(async (request, reply) => {
       if (request.method !== "GET" || request.url.startsWith("/api/")) {
@@ -123,6 +134,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return reply.sendFile("index.html");
     });
   } else {
+    // Loud on purpose: this is the difference between a working site and a 404.
+    app.log.warn(
+      `[static] SPA NOT served — serveStatic=${config.serveStatic}, distPresent=${existsSync(distDir)} (${distDir}). ` +
+        "Set SERVE_STATIC=true and ensure `npm run build` produced dist/."
+    );
+
     app.setNotFoundHandler(async (request, reply) => {
       void request;
       return reply.code(404).send({ success: false, error: "Not found." });
