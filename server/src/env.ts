@@ -135,6 +135,22 @@ const env = parsed.data;
 export const isProduction = env.NODE_ENV === "production";
 export const isTest = env.NODE_ENV === "test";
 
+/**
+ * The site's public origin, used as the `Origin` header when a sign-in request
+ * arrives without one (curl, cron, a server-to-server call).
+ *
+ * `RENDER_EXTERNAL_URL` is injected automatically by Render, so a deployed
+ * instance needs no manual configuration — but the value still has to be listed
+ * as a trusted domain in the Neon Console, or Neon Auth answers
+ * `403 INVALID_ORIGIN`.
+ */
+function resolvePublicOrigin(): string | undefined {
+  if (env.PUBLIC_ORIGIN) return env.PUBLIC_ORIGIN.replace(/\/$/, "");
+  const renderUrl = process.env.RENDER_EXTERNAL_URL;
+  if (renderUrl) return renderUrl.replace(/\/$/, "");
+  return undefined;
+}
+
 export const config = {
   nodeEnv: env.NODE_ENV,
   port: env.PORT,
@@ -191,7 +207,7 @@ export const config = {
     .filter(Boolean),
 
   /** Forwarded to Neon Auth when a sign-in request carries no Origin. */
-  publicOrigin: env.PUBLIC_ORIGIN,
+  publicOrigin: resolvePublicOrigin(),
 
   serveStatic: env.SERVE_STATIC ?? isProduction,
 } as const;
@@ -230,6 +246,7 @@ export function describeConfig(): string[] {
         ? config.neonAuth.allowedEmails.join(", ")
         : "any authenticated user"
     }`,
+    `public origin: ${config.publicOrigin ?? "NOT SET (set PUBLIC_ORIGIN if sign-in from scripts fails)"}`,
     `storage: ${
       activeStorageProvider === "s3"
         ? `S3 (bucket "${config.s3.bucket}" at ${config.s3.endpoint})`

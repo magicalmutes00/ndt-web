@@ -1,0 +1,62 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# One web service serves both the API (`/api/*`) and the built SPA, so the
+# browser only ever talks to a single origin and the session cookie stays
+# first-party. Secrets are marked `sync: false`: set them in the Render
+# dashboard rather than committing them here.
+
+services:
+  - type: web
+    name: ndt-web
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    # `npm run build` installs devDependencies (tsc, vite) because Render runs
+    # the build phase with dev deps available, then prunes them for runtime.
+    # `tsx` is therefore a regular dependency, not a dev one.
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      # Serve the SPA from this process (single-origin deployment).
+      - key: SERVE_STATIC
+        value: "true"
+      # Required for the session cookie to be sent over HTTPS.
+      - key: COOKIE_SECURE
+        value: "true"
+
+      # --- Neon Postgres (pooled connection string) -------------------------
+      - key: DATABASE_URL
+        sync: false
+
+      # --- Neon Auth --------------------------------------------------------
+      # The site's origin must be added to the project's trusted domains in the
+      # Neon Console, otherwise sign-in fails with 403 INVALID_ORIGIN.
+      - key: NEON_AUTH_URL
+        sync: false
+      - key: NEON_AUTH_ALLOWED_EMAILS
+        sync: false
+      - key: NEON_AUTH_ADMIN_API_KEY
+        sync: false
+
+      # --- Neon Object Storage (S3-compatible) ------------------------------
+      - key: AWS_ENDPOINT_URL_S3
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_FOLDER
+        value: uploads
+      - key: STORAGE_PROVIDER
+        value: s3

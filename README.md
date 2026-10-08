@@ -226,6 +226,51 @@ third-party cookie blocking will reject the session. Prefer the rewrite.
 
 Set `COOKIE_SECURE=true` and a real `SESSION_SECRET` in both cases.
 
+## Deploying to Render
+
+A [render.yaml](render.yaml) Blueprint is included. One **web service** serves
+both the API (`/api/*`) and the built SPA from the same origin, which is what
+keeps the session cookie first-party — see the earlier note about why splitting
+them across origins breaks sign-in.
+
+1. Push this repo to GitHub.
+2. Render → **New → Blueprint**, pick the repo. Render reads `render.yaml`.
+3. Fill in the values marked `sync: false` (Render prompts for them; they are
+   deliberately not in git).
+4. Deploy, then open `https://<service>.onrender.com`.
+
+### Values you must provide
+
+| Variable | Where to get it |
+|---|---|
+| `DATABASE_URL` | Neon Console → Connection string (**pooled**) |
+| `NEON_AUTH_URL` | Neon Console → Branch → Auth → Configuration |
+| `NEON_AUTH_ALLOWED_EMAILS` | The admin address(es) — strongly recommended |
+| `NEON_AUTH_ADMIN_API_KEY` | Neon Console → Auth → Configuration (only for user admin) |
+| `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET` | Neon Object Storage credential and bucket |
+
+### Two settings that will bite you
+
+- **Add your Render URL to Neon Auth's trusted domains.** Neon Auth rejects
+  sign-in from an unregistered origin with `403 INVALID_ORIGIN`. In the Neon
+  Console add `https://<service>.onrender.com` (and any custom domain). Without
+  this, the dashboard loads but nobody can sign in.
+- **Free instances sleep.** After ~15 minutes idle the service cold-starts, so
+  the first request takes a few seconds and `/api/health` is the health check
+  Render polls.
+
+### Notes
+
+- `tsx` is a **regular** dependency, not a dev one, because `npm start` runs it
+  and Render prunes devDependencies at runtime. `cross-env` was removed for the
+  same reason: `NODE_ENV=production` is set as an env var instead.
+- The build runs `npm ci && npm run build`, so `tsc` and `vite` are available
+  during the build phase only.
+- `PUBLIC_ORIGIN` needs no value on Render — `RENDER_EXTERNAL_URL` is detected
+  automatically.
+- `SERVE_STATIC=true` and `COOKIE_SECURE=true` are set by the Blueprint.
+- Schema migrations run automatically at boot and are idempotent.
+
 ## Project layout
 
 ```
