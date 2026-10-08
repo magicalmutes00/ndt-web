@@ -33,6 +33,26 @@ export class AuthServiceError extends Error {
   }
 }
 
+/**
+ * The auth service refused the request because the site's origin is not on its
+ * trusted-domain list.
+ *
+ * Kept distinct from AuthServiceError so the login screen can say "this domain
+ * is not authorised" instead of "temporarily unavailable" — the latter sends
+ * people off debugging the wrong thing (it cost me a full round trip).
+ */
+export class AuthOriginUntrustedError extends Error {
+  readonly code = "AUTH_ORIGIN_NOT_TRUSTED";
+  constructor(origin: string | undefined) {
+    super(
+      origin
+        ? `Neon Auth does not trust ${origin}. Add it under Auth → Configuration → Trusted domains in the Neon Console.`
+        : "Neon Auth requires a trusted Origin, and this site's origin is not configured."
+    );
+    this.name = "AuthOriginUntrustedError";
+  }
+}
+
 export interface NeonUser {
   id: string;
   email: string;
@@ -332,14 +352,11 @@ export async function signInWithPassword(
 
   if (response.status === 401 || response.status === 403) {
     // 403 here is almost always a missing/untrusted Origin rather than bad
-    // credentials, so surface it instead of reporting a wrong password.
+    // credentials, so distinguish it from a wrong password.
     if (response.status === 403) {
       const body = (await response.clone().json().catch(() => null)) as { code?: string } | null;
       if (body?.code === "MISSING_OR_NULL_ORIGIN" || body?.code === "INVALID_ORIGIN") {
-        throw new AuthServiceError(
-          `Sign-in was rejected because the site origin is missing or not trusted by Neon Auth (${body.code}). ` +
-            "Add this site's origin to the project's trusted domains in the Neon Console."
-        );
+        throw new AuthOriginUntrustedError(origin);
       }
     }
     return null;

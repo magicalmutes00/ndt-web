@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { config, isAuthConfigured } from "../env.js";
 import {
   AuthNotConfiguredError,
+  AuthOriginUntrustedError,
   AuthServiceError,
   isEmailAllowed,
   signInWithPassword,
@@ -75,6 +76,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       result = await signInWithPassword(email, password, origin);
     } catch (error) {
+      // An untrusted origin is a configuration problem, not a transient outage,
+      // so say so plainly and give the exact fix.
+      if (error instanceof AuthOriginUntrustedError) {
+        request.log.error({ err: error }, "sign-in refused: untrusted origin");
+        return reply.code(502).send({
+          success: false,
+          error: error.message,
+          code: "AUTH_ORIGIN_NOT_TRUSTED",
+        });
+      }
       if (error instanceof AuthServiceError || error instanceof AuthNotConfiguredError) {
         request.log.error({ err: error }, "sign-in failed");
         return reply.code(503).send({
